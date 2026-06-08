@@ -3,6 +3,7 @@ import type { Movie, PlayerEventData } from '../types';
 import VideoPlayer from './VideoPlayer';
 import { upsertProgress } from '../lib/watchHistory';
 import { lockLandscape, unlockOrientation } from '../lib/orientation';
+import { SERVERS, getServer, getStoredServerId, storeServerId } from '../lib/servers';
 
 interface MovieModalProps {
   movie: Movie;
@@ -12,7 +13,14 @@ interface MovieModalProps {
 export default function MovieModal({ movie, onClose }: MovieModalProps) {
   const [progressPct, setProgressPct] = useState(0);
   const [playerEvent, setPlayerEvent] = useState<string>('');
+  const [serverId, setServerId] = useState<string>(getStoredServerId);
   const lastSavedRef = useRef(0);
+  const server = getServer(serverId);
+
+  function handleServerChange(id: string) {
+    setServerId(id);
+    storeServerId(id);
+  }
 
   /* Force landscape while the player is open; restore on close. */
   useEffect(() => {
@@ -58,7 +66,24 @@ export default function MovieModal({ movie, onClose }: MovieModalProps) {
         <button className="modal__close" onClick={onClose} aria-label="Close">✕</button>
 
         {/* Player */}
-        <VideoPlayer movie={movie} onEvent={handlePlayerEvent} />
+        <VideoPlayer movie={movie} server={server} onEvent={handlePlayerEvent} />
+
+        {/* Server selector — switch source if playback fails */}
+        <div className="modal__servers">
+          <span className="modal__servers-label">Server</span>
+          <div className="modal__servers-list">
+            {SERVERS.map((s) => (
+              <button
+                key={s.id}
+                className={`server-chip${s.id === serverId ? ' server-chip--active' : ''}`}
+                onClick={() => handleServerChange(s.id)}
+              >
+                {s.label}
+              </button>
+            ))}
+          </div>
+          <span className="modal__servers-hint">Playback not working? Try another server.</span>
+        </div>
 
         {/* Progress bar */}
         {progressPct > 0 && (

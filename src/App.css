@@ -987,3 +987,48 @@
 @media (max-width: 600px) {
   .navbar__email { display: none; }
 }
+
+/* =====================
+   SERVER SELECTOR
+   ===================== */
+.modal__servers {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: .5rem .75rem;
+  padding: .9rem 1.25rem 0;
+}
+.modal__servers-label {
+  font-size: .8rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+.modal__servers-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .4rem;
+}
+.server-chip {
+  padding: .4rem .85rem;
+  font-size: .82rem;
+  font-weight: 600;
+  color: var(--text);
+  background: var(--bg-2);
+  border: 1px solid rgba(255, 255, 255, .1);
+  border-radius: 999px;
+  transition: background .15s, border-color .15s, transform .12s;
+}
+.server-chip:hover { background: var(--surface); border-color: rgba(255, 255, 255, .2); }
+.server-chip:active { transform: translateY(1px); }
+.server-chip--active {
+  color: #06210a;
+  background: var(--accent-grad);
+  border-color: transparent;
+}
+.modal__servers-hint {
+  flex-basis: 100%;
+  font-size: .75rem;
+  color: var(--text-muted);
+}

@@ -1,51 +1,37 @@
 import { useEffect, useRef, useState } from 'react';
 import type { Movie, PlayerMessage } from '../types';
-import { VIDKING_BASE, PLAYER_COLOR } from '../constants';
+import type { StreamServer } from '../lib/servers';
 
 interface VideoPlayerProps {
   movie: Movie;
+  server: StreamServer;
   onEvent?: (data: PlayerMessage['data']) => void;
 }
 
-function buildEmbedUrl(movie: Movie): string {
-  const path =
-    movie.mediaType === 'movie'
-      ? `/embed/movie/${movie.tmdbId}`
-      : `/embed/tv/${movie.tmdbId}/${movie.season ?? 1}/${movie.episode ?? 1}`;
-
-  const params = new URLSearchParams({ color: PLAYER_COLOR, autoPlay: 'true' });
-
-  // Resume from saved position when launched via Continue Watching.
-  if (movie.resumeTime && movie.resumeTime > 0) {
-    params.set('progress', String(Math.floor(movie.resumeTime)));
-  }
-
-  if (movie.mediaType === 'tv') {
-    params.set('episodeSelector', 'true');
-    params.set('nextEpisode', 'true');
-  }
-
-  return `${VIDKING_BASE}${path}?${params.toString()}`;
-}
-
-export default function VideoPlayer({ movie, onEvent }: VideoPlayerProps) {
-  const [loading, setLoading] = useState(true);
+export default function VideoPlayer({ movie, server, onEvent }: VideoPlayerProps) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
-  const src = buildEmbedUrl(movie);
+  const src = server.build(movie);
 
+  // Derive the spinner from which src has loaded — this auto-resets when the
+  // source changes (e.g. switching servers) without a state-resetting effect.
+  const [loadedSrc, setLoadedSrc] = useState<string | null>(null);
+  const loading = loadedSrc !== src;
+
+  // Progress events only come from trackable providers; validate by origin.
   useEffect(() => {
+    if (!server.trackable || !server.origin || !onEvent) return;
     const handleMessage = (e: MessageEvent) => {
-      if (e.origin !== VIDKING_BASE) return;
+      if (e.origin !== server.origin) return;
       try {
         const parsed = JSON.parse(e.data as string) as PlayerMessage;
-        if (parsed.type === 'PLAYER_EVENT' && onEvent) onEvent(parsed.data);
+        if (parsed.type === 'PLAYER_EVENT') onEvent(parsed.data);
       } catch {
         // non-JSON frames ignored
       }
     };
     window.addEventListener('message', handleMessage);
     return () => window.removeEventListener('message', handleMessage);
-  }, [onEvent]);
+  }, [server, onEvent]);
 
   // Redirect-jack guard: the unsandboxed player can try to navigate the whole
   // tab to an ad page. While the player is open, intercept any unload so a
@@ -65,10 +51,11 @@ export default function VideoPlayer({ movie, onEvent }: VideoPlayerProps) {
       {loading && <div className="vk-player__skeleton" />}
       <iframe
         ref={iframeRef}
+        key={src}
         src={src}
         className="vk-player__iframe"
-        // NOTE: this provider refuses to run under ANY iframe sandbox, so we
-        // can't block its top-navigation / popup ad vector at the frame level.
+        // NOTE: these providers refuse to run under ANY iframe sandbox, so we
+        // can't block their top-navigation / popup ad vector at the frame level.
         // Mitigations instead: no-referrer (don't leak our URL to it), a scoped
         // permissions policy below, the postMessage origin check above, and the
         // beforeunload guard (see effect) that turns a silent redirect-jack into
@@ -78,7 +65,7 @@ export default function VideoPlayer({ movie, onEvent }: VideoPlayerProps) {
         allow="autoplay; fullscreen; encrypted-media; picture-in-picture"
         allowFullScreen
         title={`Watch ${movie.title}`}
-        onLoad={() => setLoading(false)}
+        onLoad={() => setLoadedSrc(src)}
       />
     </div>
   );
