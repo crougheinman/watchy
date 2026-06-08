@@ -9,13 +9,16 @@ import ContinueWatching from './components/ContinueWatching';
 import MovieModal from './components/MovieModal';
 import SearchOverlay from './components/SearchOverlay';
 import LoginPage from './components/LoginPage';
+import UpdateRequired from './components/UpdateRequired';
 import { useAuth } from './hooks/useAuth';
+import { useAppVersion } from './hooks/useAppVersion';
 import { APP_NAME } from './constants';
 import type { Movie } from './types';
 import './App.css';
 
 function App() {
-  const { session, loading: authLoading } = useAuth();
+  const { session, loading: authLoading, signOut } = useAuth();
+  const { checking: versionChecking, outdated, latest, downloadUrl } = useAppVersion();
   const { data: categories, loading: categoriesLoading, error: categoriesError } = useFetchCategories();
   const [selectedMovie, setSelectedMovie] = useState<Movie | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -34,17 +37,24 @@ function App() {
     return () => { void handle.then((h) => h.remove()); };
   }, [searchOpen, selectedMovie]);
 
+  // Outdated builds are signed out so they re-authenticate after updating.
+  useEffect(() => {
+    if (outdated) void signOut();
+  }, [outdated, signOut]);
+
+  const splash = (
+    <div className="auth">
+      <span className="auth__logo">{APP_NAME}</span>
+    </div>
+  );
+
+  // Version gate takes priority over everything else.
+  if (versionChecking) return splash;
+  if (outdated) return <UpdateRequired latest={latest} downloadUrl={downloadUrl} />;
+
   // Auth gate: block the app until a session exists.
-  if (authLoading) {
-    return (
-      <div className="auth">
-        <span className="auth__logo">{APP_NAME}</span>
-      </div>
-    );
-  }
-  if (!session) {
-    return <LoginPage />;
-  }
+  if (authLoading) return splash;
+  if (!session) return <LoginPage />;
 
   return (
     <div className="app">

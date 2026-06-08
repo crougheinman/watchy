@@ -1130,3 +1130,42 @@
   .server-chip,
   .shield-toggle { flex: 0 0 auto; }
 }
+
+/* =====================
+   UPDATE REQUIRED GATE
+   ===================== */
+.update__card { text-align: center; }
+.update__icon {
+  font-size: 2.6rem;
+  line-height: 1;
+  margin-bottom: .5rem;
+}
+.update__title {
+  font-size: 1.5rem;
+  font-weight: 800;
+  margin: .25rem 0 .6rem;
+}
+.update__text {
+  font-size: .92rem;
+  line-height: 1.55;
+  color: var(--text-muted);
+  margin-bottom: 1.1rem;
+}
+.update__versions {
+  display: flex;
+  flex-direction: column;
+  gap: .25rem;
+  font-size: .85rem;
+  color: var(--text-muted);
+  padding: .75rem;
+  margin-bottom: 1.1rem;
+  background: var(--bg-2);
+  border-radius: 10px;
+}
+.update__versions strong { color: var(--text); }
+.update__btn { width: 100%; }
+.update__hint {
+  margin-top: 1rem;
+  font-size: .78rem;
+  color: var(--text-muted);
+}
