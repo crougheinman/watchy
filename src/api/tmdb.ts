@@ -76,13 +76,9 @@ async function get<T>(
 // older and well-voted — which actually play. Tune this ceiling to taste.
 const RELEASE_CEILING = '2024-12-31';
 
-export async function fetchPopular(): Promise<Movie[]> {
-  const data = await get<ListResponse>('/discover/movie', {
-    sort_by:                    'popularity.desc',
-    'vote_count.gte':           '300',
-    'primary_release_date.lte': RELEASE_CEILING,
-    with_original_language:     'en',
-  });
+export async function fetchTrending(): Promise<Movie[]> {
+  // Real "trending this week" feed (not just popularity-sorted catalogue).
+  const data = await get<ListResponse>('/trending/movie/week');
   return data.results.filter((m) => m.backdrop_path).map((m) => mapMovie(m));
 }
 
@@ -116,6 +112,33 @@ export async function fetchByGenre(
   return data.results.map((m) => mapMovie(m));
 }
 
+interface VideoItem {
+  key: string;
+  site: string;
+  type: string;
+  official?: boolean;
+}
+interface VideosResponse { results: VideoItem[] }
+
+/**
+ * Best YouTube trailer/teaser key for a movie, or null if none.
+ * Prefers an official Trailer, then any Trailer, then any teaser/clip.
+ */
+export async function fetchTrailerKey(tmdbId: number, signal?: AbortSignal): Promise<string | null> {
+  try {
+    const data = await get<VideosResponse>(`/movie/${tmdbId}/videos`, {}, signal);
+    const yt = data.results.filter((v) => v.site === 'YouTube');
+    const best =
+      yt.find((v) => v.type === 'Trailer' && v.official) ||
+      yt.find((v) => v.type === 'Trailer') ||
+      yt.find((v) => v.type === 'Teaser') ||
+      yt[0];
+    return best?.key ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export async function fetchSearch(query: string, signal?: AbortSignal): Promise<Movie[]> {
   if (!query.trim()) return [];
   const data = await get<ListResponse>('/search/multi', { query: query.trim() }, signal);
@@ -126,7 +149,7 @@ export async function fetchSearch(query: string, signal?: AbortSignal): Promise<
 
 export async function fetchAllCategories(): Promise<MovieCategory[]> {
   const defs: { id: string; title: string; load: () => Promise<Movie[]> }[] = [
-    { id: 'trending', title: 'Popular Movies',       load: () => fetchPopular() },
+    { id: 'trending', title: 'Trending',             load: () => fetchTrending() },
     { id: 'netflix',  title: 'Netflix',             load: () => fetchNetflix() },
     { id: 'action',   title: 'Action & Adventure',  load: () => fetchByGenre(28) },
     { id: 'comedy',   title: 'Comedy Hits',         load: () => fetchByGenre(35) },

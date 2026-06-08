@@ -26,3 +26,6 @@ dist-ssr
 
 # Built APKs (use build-apk.bat to regenerate)
 *.apk
+
+# Contains Telegram bot token / webhook secret
+set-webhook.bat

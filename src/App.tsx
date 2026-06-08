@@ -10,8 +10,10 @@ import MovieModal from './components/MovieModal';
 import SearchOverlay from './components/SearchOverlay';
 import LoginPage from './components/LoginPage';
 import UpdateRequired from './components/UpdateRequired';
+import AccountDisabled from './components/AccountDisabled';
 import { useAuth } from './hooks/useAuth';
 import { useAppVersion } from './hooks/useAppVersion';
+import { useAccountStatus } from './hooks/useAccountStatus';
 import { APP_NAME } from './constants';
 import type { Movie } from './types';
 import './App.css';
@@ -19,12 +21,13 @@ import './App.css';
 function App() {
   const { session, loading: authLoading, signOut } = useAuth();
   const { checking: versionChecking, outdated, latest, downloadUrl } = useAppVersion();
+  const { checking: statusChecking, disabled, reason } = useAccountStatus(session?.user?.id);
   const { data: categories, loading: categoriesLoading, error: categoriesError } = useFetchCategories();
   const [selectedMovie, setSelectedMovie] = useState<Movie | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
 
-  // Featured hero is the first trending title — no separate request.
-  const featured = categories?.find((c) => c.id === 'trending')?.movies[0] ?? null;
+  // Hero rotates through the top 10 trending titles — no separate request.
+  const heroMovies = categories?.find((c) => c.id === 'trending')?.movies.slice(0, 10) ?? [];
 
   // Android hardware back button: close the topmost overlay, else leave the app.
   useEffect(() => {
@@ -56,11 +59,15 @@ function App() {
   if (authLoading) return splash;
   if (!session) return <LoginPage />;
 
+  // Account gate: an admin can disable a user from Supabase.
+  if (statusChecking) return splash;
+  if (disabled) return <AccountDisabled reason={reason} onSignOut={() => void signOut()} />;
+
   return (
     <div className="app">
       <Navbar onSearchOpen={() => setSearchOpen(true)} />
       <Hero
-        movie={featured}
+        movies={heroMovies}
         loading={categoriesLoading}
         onPlay={setSelectedMovie}
       />
