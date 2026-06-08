@@ -1,4 +1,5 @@
 import type { Movie } from '../types';
+import type { ServerIconKind } from '../components/ServerIcon';
 import { VIDKING_BASE, PLAYER_COLOR } from '../constants';
 
 /**
@@ -16,6 +17,7 @@ import { VIDKING_BASE, PLAYER_COLOR } from '../constants';
 export interface StreamServer {
   id: string;
   label: string;
+  icon: ServerIconKind;
   trackable: boolean;
   origin?: string;
   build: (movie: Movie) => string;
@@ -26,7 +28,8 @@ const ep = (m: Movie) => ({ s: m.season ?? 1, e: m.episode ?? 1 });
 export const SERVERS: StreamServer[] = [
   {
     id: 'vidking',
-    label: 'Vidking',
+    label: 'Maki',
+    icon: 'browndog',
     trackable: true,
     origin: VIDKING_BASE,
     build: (movie) => {
@@ -44,7 +47,8 @@ export const SERVERS: StreamServer[] = [
   },
   {
     id: 'videasy',
-    label: 'Videasy',
+    label: 'Litol',
+    icon: 'browndog',
     trackable: true,
     origin: 'https://player.videasy.net',
     build: (movie) => {
@@ -62,7 +66,8 @@ export const SERVERS: StreamServer[] = [
   },
   {
     id: 'vidlink',
-    label: 'VidLink',
+    label: 'Pipip',
+    icon: 'whitedog',
     trackable: false,
     build: (movie) =>
       movie.mediaType === 'movie'
@@ -71,7 +76,8 @@ export const SERVERS: StreamServer[] = [
   },
   {
     id: 'vidsrc',
-    label: 'VidSrc',
+    label: 'Vito',
+    icon: 'orangecat',
     trackable: false,
     build: (movie) =>
       movie.mediaType === 'movie'
@@ -80,7 +86,8 @@ export const SERVERS: StreamServer[] = [
   },
   {
     id: '2embed',
-    label: '2Embed',
+    label: 'Clippant',
+    icon: 'orangecat',
     trackable: false,
     build: (movie) =>
       movie.mediaType === 'movie'
@@ -89,7 +96,8 @@ export const SERVERS: StreamServer[] = [
   },
   {
     id: 'superembed',
-    label: 'SuperEmbed',
+    label: 'Bart',
+    icon: 'orangecat',
     trackable: false,
     // SuperEmbed's embed API is served from multiembed.mov.
     build: (movie) => {
@@ -125,5 +133,24 @@ export function storeServerId(id: string): void {
     localStorage.setItem(STORAGE_KEY, id);
   } catch {
     /* quota / private mode — ignore */
+  }
+}
+
+// Ad Shield preference — on by default (blocks pop-up/redirect ads).
+const SHIELD_KEY = 'watchy:shield';
+
+export function getStoredShield(): boolean {
+  try {
+    return localStorage.getItem(SHIELD_KEY) !== 'off';
+  } catch {
+    return true;
+  }
+}
+
+export function storeShield(on: boolean): void {
+  try {
+    localStorage.setItem(SHIELD_KEY, on ? 'on' : 'off');
+  } catch {
+    /* ignore */
   }
 }

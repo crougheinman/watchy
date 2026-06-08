@@ -1,9 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Movie, PlayerEventData } from '../types';
 import VideoPlayer from './VideoPlayer';
+import ServerIcon from './ServerIcon';
 import { upsertProgress } from '../lib/watchHistory';
 import { lockLandscape, unlockOrientation } from '../lib/orientation';
-import { SERVERS, getServer, getStoredServerId, storeServerId } from '../lib/servers';
+import {
+  SERVERS, getServer, getStoredServerId, storeServerId,
+  getStoredShield, storeShield,
+} from '../lib/servers';
 
 interface MovieModalProps {
   movie: Movie;
@@ -14,12 +18,21 @@ export default function MovieModal({ movie, onClose }: MovieModalProps) {
   const [progressPct, setProgressPct] = useState(0);
   const [playerEvent, setPlayerEvent] = useState<string>('');
   const [serverId, setServerId] = useState<string>(getStoredServerId);
+  const [shield, setShield] = useState<boolean>(getStoredShield);
   const lastSavedRef = useRef(0);
   const server = getServer(serverId);
 
   function handleServerChange(id: string) {
     setServerId(id);
     storeServerId(id);
+  }
+
+  function toggleShield() {
+    setShield((prev) => {
+      const next = !prev;
+      storeShield(next);
+      return next;
+    });
   }
 
   /* Force landscape while the player is open; restore on close. */
@@ -66,9 +79,9 @@ export default function MovieModal({ movie, onClose }: MovieModalProps) {
         <button className="modal__close" onClick={onClose} aria-label="Close">✕</button>
 
         {/* Player */}
-        <VideoPlayer movie={movie} server={server} onEvent={handlePlayerEvent} />
+        <VideoPlayer movie={movie} server={server} shield={shield} onEvent={handlePlayerEvent} />
 
-        {/* Server selector — switch source if playback fails */}
+        {/* Player controls — server source + ad shield */}
         <div className="modal__servers">
           <span className="modal__servers-label">Server</span>
           <div className="modal__servers-list">
@@ -78,11 +91,29 @@ export default function MovieModal({ movie, onClose }: MovieModalProps) {
                 className={`server-chip${s.id === serverId ? ' server-chip--active' : ''}`}
                 onClick={() => handleServerChange(s.id)}
               >
+                <ServerIcon kind={s.icon} />
                 {s.label}
               </button>
             ))}
           </div>
-          <span className="modal__servers-hint">Playback not working? Try another server.</span>
+
+          <button
+            className={`shield-toggle${shield ? ' shield-toggle--on' : ''}`}
+            onClick={toggleShield}
+            aria-pressed={shield}
+            title={shield
+              ? 'Ad Shield ON — blocks redirect-jacks & pop-ups'
+              : 'Ad Shield OFF — the player can redirect the tab or open ad tabs'}
+          >
+            <span aria-hidden="true">{shield ? '🛡️' : '⚠️'}</span>
+            Ad Shield: {shield ? 'On' : 'Off'}
+          </button>
+
+          <span className="modal__servers-hint">
+            {shield
+              ? 'Ad Shield blocks tab redirects & pop-ups. Some ads inside the player can’t be blocked on the web.'
+              : 'Ad Shield is off — the player may redirect the tab or open ad tabs.'}
+          </span>
         </div>
 
         {/* Progress bar */}

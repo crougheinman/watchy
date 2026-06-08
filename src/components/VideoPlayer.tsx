@@ -5,10 +5,12 @@ import type { StreamServer } from '../lib/servers';
 interface VideoPlayerProps {
   movie: Movie;
   server: StreamServer;
+  /** Ad Shield: block redirect-jacks and pop-ups while the player is open. */
+  shield: boolean;
   onEvent?: (data: PlayerMessage['data']) => void;
 }
 
-export default function VideoPlayer({ movie, server, onEvent }: VideoPlayerProps) {
+export default function VideoPlayer({ movie, server, shield, onEvent }: VideoPlayerProps) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const src = server.build(movie);
 
@@ -33,18 +35,34 @@ export default function VideoPlayer({ movie, server, onEvent }: VideoPlayerProps
     return () => window.removeEventListener('message', handleMessage);
   }, [server, onEvent]);
 
-  // Redirect-jack guard: the unsandboxed player can try to navigate the whole
-  // tab to an ad page. While the player is open, intercept any unload so a
-  // surprise redirect becomes a "Leave site?" prompt the user can cancel.
-  // Unmounts with the modal, so it never fires during normal app use.
+  // Ad Shield. NOTE: these providers refuse to run inside a sandboxed iframe
+  // ("Sandbox not allowed"), so we can't use the frame sandbox to block ads.
+  // Instead, while the shield is ON we:
+  //   1. Guard top-navigation: a redirect-jack (player sending the whole tab to
+  //      an ad page) becomes a cancelable "Leave site?" prompt.
+  //   2. Neutralize window.open on our window so any pop-up routed through the
+  //      top context is swallowed.
+  // (A cross-origin frame's own pop-up tabs can't be closed from here on the
+  // web — that needs the native WebView interceptor.)
   useEffect(() => {
+    if (!shield) return;
+
     const onBeforeUnload = (e: BeforeUnloadEvent) => {
       e.preventDefault();
       e.returnValue = '';
     };
     window.addEventListener('beforeunload', onBeforeUnload);
-    return () => window.removeEventListener('beforeunload', onBeforeUnload);
-  }, []);
+
+    const realOpen = window.open;
+    window.open = function blockedOpen() {
+      return null;
+    };
+
+    return () => {
+      window.removeEventListener('beforeunload', onBeforeUnload);
+      window.open = realOpen;
+    };
+  }, [shield]);
 
   return (
     <div className="vk-player">
@@ -54,13 +72,10 @@ export default function VideoPlayer({ movie, server, onEvent }: VideoPlayerProps
         key={src}
         src={src}
         className="vk-player__iframe"
-        // NOTE: these providers refuse to run under ANY iframe sandbox, so we
-        // can't block their top-navigation / popup ad vector at the frame level.
-        // Mitigations instead: no-referrer (don't leak our URL to it), a scoped
+        // No sandbox: these providers detect it and refuse to play. Layered
+        // protections instead: no-referrer (don't leak our URL), a scoped
         // permissions policy below, the postMessage origin check above, and the
-        // beforeunload guard (see effect) that turns a silent redirect-jack into
-        // a cancelable prompt. A player that demands an unsandboxed frame is
-        // itself the risk flagged in the project analysis.
+        // Ad Shield effect (redirect guard + window.open block).
         referrerPolicy="no-referrer"
         allow="autoplay; fullscreen; encrypted-media; picture-in-picture"
         allowFullScreen
