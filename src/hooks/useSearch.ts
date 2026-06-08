@@ -8,32 +8,49 @@ interface SearchState {
   error: string | null;
 }
 
+interface InternalState {
+  results: Movie[];
+  forQuery: string; // the query these results / error belong to
+  error: string | null;
+}
+
 export function useSearch(query: string, debounceMs = 350): SearchState {
-  const [state, setState] = useState<SearchState>({ results: [], loading: false, error: null });
+  const [state, setState] = useState<InternalState>({ results: [], forQuery: '', error: null });
   const abortRef = useRef<AbortController | null>(null);
+  const trimmed = query.trim();
 
   useEffect(() => {
-    if (!query.trim()) {
-      setState({ results: [], loading: false, error: null });
-      return;
-    }
-
-    setState((s) => ({ ...s, loading: true, error: null }));
+    if (!trimmed) return; // nothing to fetch; empty state is derived below
 
     const timer = setTimeout(() => {
       abortRef.current?.abort();
-      abortRef.current = new AbortController();
+      const controller = new AbortController();
+      abortRef.current = controller;
 
-      fetchSearch(query)
-        .then((results) => setState({ results, loading: false, error: null }))
+      fetchSearch(trimmed, controller.signal)
+        .then((results) => {
+          if (!controller.signal.aborted) setState({ results, forQuery: trimmed, error: null });
+        })
         .catch((err: unknown) => {
+          if (controller.signal.aborted) return; // superseded by a newer query
           const msg = err instanceof Error ? err.message : 'Search failed';
-          setState({ results: [], loading: false, error: msg });
+          setState({ results: [], forQuery: trimmed, error: msg });
         });
     }, debounceMs);
 
-    return () => clearTimeout(timer);
-  }, [query, debounceMs]);
+    return () => {
+      clearTimeout(timer);
+      abortRef.current?.abort(); // cancel in-flight request on unmount / query change
+    };
+  }, [trimmed, debounceMs]);
 
-  return state;
+  // Derive the public state — loading is true whenever the stored results don't
+  // yet correspond to the current query. No setState-in-effect, no refs-in-render.
+  if (!trimmed) return { results: [], loading: false, error: null };
+  const settled = state.forQuery === trimmed;
+  return {
+    results: settled ? state.results : [],
+    loading: !settled,
+    error: settled ? state.error : null,
+  };
 }

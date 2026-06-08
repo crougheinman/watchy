@@ -14,6 +14,8 @@ export interface Movie {
   duration?: string;
   matchScore?: number;
   featured?: boolean;
+  /** Seconds to resume playback from (set when opened via Continue Watching). */
+  resumeTime?: number;
 }
 
 export interface MovieCategory {

@@ -1,7 +1,5 @@
 import type { Movie, MovieCategory } from '../types';
-
-const BASE_URL = 'https://db.videasy.net/3';
-const IMG_BASE = 'https://image.tmdb.org/t/p';
+import { TMDB_API_BASE as BASE_URL, TMDB_IMG_BASE as IMG_BASE } from '../constants';
 
 const GENRE_MAP: Record<number, string> = {
   28:    'Action',
@@ -60,17 +58,31 @@ function mapMovie(raw: RawMovie, forcedType?: 'movie' | 'tv'): Movie {
   };
 }
 
-async function get<T>(path: string, params: Record<string, string> = {}): Promise<T> {
+async function get<T>(
+  path: string,
+  params: Record<string, string> = {},
+  signal?: AbortSignal,
+): Promise<T> {
   const url = new URL(`${BASE_URL}${path}`);
   for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
 
-  const res = await fetch(url.toString());
+  const res = await fetch(url.toString(), { signal });
   if (!res.ok) throw new Error(`Videasy API ${res.status}: ${res.statusText}`);
   return res.json() as Promise<T>;
 }
 
-export async function fetchTrending(): Promise<Movie[]> {
-  const data = await get<ListResponse>('/trending/movie/week');
+// Brand-new releases almost never have working sources on the embed provider
+// ("No sources available"), so the feed targets established catalogue films —
+// older and well-voted — which actually play. Tune this ceiling to taste.
+const RELEASE_CEILING = '2024-12-31';
+
+export async function fetchPopular(): Promise<Movie[]> {
+  const data = await get<ListResponse>('/discover/movie', {
+    sort_by:                    'popularity.desc',
+    'vote_count.gte':           '300',
+    'primary_release_date.lte': RELEASE_CEILING,
+    with_original_language:     'en',
+  });
   return data.results.filter((m) => m.backdrop_path).map((m) => mapMovie(m));
 }
 
@@ -79,38 +91,48 @@ export async function fetchByGenre(
   extra: Record<string, string> = {},
 ): Promise<Movie[]> {
   const data = await get<ListResponse>('/discover/movie', {
-    with_genres:      String(genreId),
-    sort_by:          'popularity.desc',
-    'vote_count.gte': '100',
+    with_genres:                String(genreId),
+    sort_by:                    'popularity.desc',
+    'vote_count.gte':           '200',
+    'primary_release_date.lte': RELEASE_CEILING,
     ...extra,
   });
   return data.results.map((m) => mapMovie(m));
 }
 
-export async function fetchSearch(query: string): Promise<Movie[]> {
+export async function fetchSearch(query: string, signal?: AbortSignal): Promise<Movie[]> {
   if (!query.trim()) return [];
-  const data = await get<ListResponse>('/search/multi', { query: query.trim() });
+  const data = await get<ListResponse>('/search/multi', { query: query.trim() }, signal);
   return data.results
     .filter((m) => (m.media_type === 'movie' || m.media_type === 'tv') && (m.title ?? m.name))
     .map((m) => mapMovie(m));
 }
 
 export async function fetchAllCategories(): Promise<MovieCategory[]> {
-  const [trending, action, comedy, scifi, drama, thriller] = await Promise.all([
-    fetchTrending(),
-    fetchByGenre(28),
-    fetchByGenre(35),
-    fetchByGenre(878),
-    fetchByGenre(18, { sort_by: 'vote_average.desc', 'vote_count.gte': '500' }),
-    fetchByGenre(53),
-  ]);
-
-  return [
-    { id: 'trending',    title: 'Trending Now',       movies: trending },
-    { id: 'action',      title: 'Action & Adventure',  movies: action },
-    { id: 'comedy',      title: 'Comedy Hits',         movies: comedy },
-    { id: 'scifi',       title: 'Sci-Fi & Fantasy',    movies: scifi },
-    { id: 'drama',       title: 'Top-Rated Dramas',    movies: drama },
-    { id: 'thriller',    title: 'Thrilling Mysteries', movies: thriller },
+  const defs: { id: string; title: string; load: () => Promise<Movie[]> }[] = [
+    { id: 'trending', title: 'Popular Movies',       load: () => fetchPopular() },
+    { id: 'action',   title: 'Action & Adventure',  load: () => fetchByGenre(28) },
+    { id: 'comedy',   title: 'Comedy Hits',         load: () => fetchByGenre(35) },
+    { id: 'scifi',    title: 'Sci-Fi & Fantasy',    load: () => fetchByGenre(878) },
+    { id: 'drama',    title: 'Top-Rated Dramas',    load: () => fetchByGenre(18, { sort_by: 'vote_average.desc', 'vote_count.gte': '500' }) },
+    { id: 'thriller', title: 'Thrilling Mysteries', load: () => fetchByGenre(53) },
   ];
+
+  const settled = await Promise.allSettled(defs.map((d) => d.load()));
+
+  const categories = defs
+    .map((d, i): MovieCategory | null => {
+      const r = settled[i];
+      return r.status === 'fulfilled' && r.value.length > 0
+        ? { id: d.id, title: d.title, movies: r.value }
+        : null;
+    })
+    .filter((c): c is MovieCategory => c !== null);
+
+  // Only fail hard if nothing at all loaded.
+  if (categories.length === 0) {
+    throw new Error('Could not load any titles. The metadata source may be unavailable.');
+  }
+
+  return categories;
 }

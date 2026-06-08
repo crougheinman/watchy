@@ -1,8 +1,11 @@
-import { useState } from 'react';
-import { useFetchCategories, useFetchFeatured } from './hooks/useFetchMovies';
+import { useEffect, useState } from 'react';
+import { Capacitor } from '@capacitor/core';
+import { App as CapacitorApp } from '@capacitor/app';
+import { useFetchCategories } from './hooks/useFetchMovies';
 import Navbar from './components/Navbar';
 import Hero from './components/Hero';
 import MovieRow from './components/MovieRow';
+import ContinueWatching from './components/ContinueWatching';
 import MovieModal from './components/MovieModal';
 import SearchOverlay from './components/SearchOverlay';
 import { APP_NAME } from './constants';
@@ -10,27 +13,41 @@ import type { Movie } from './types';
 import './App.css';
 
 function App() {
-  const { data: featured, loading: featuredLoading, error: featuredError } = useFetchFeatured();
   const { data: categories, loading: categoriesLoading, error: categoriesError } = useFetchCategories();
   const [selectedMovie, setSelectedMovie] = useState<Movie | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
+
+  // Featured hero is the first trending title — no separate request.
+  const featured = categories?.find((c) => c.id === 'trending')?.movies[0] ?? null;
+
+  // Android hardware back button: close the topmost overlay, else leave the app.
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform()) return;
+    const handle = CapacitorApp.addListener('backButton', () => {
+      if (searchOpen) setSearchOpen(false);
+      else if (selectedMovie) setSelectedMovie(null);
+      else void CapacitorApp.exitApp();
+    });
+    return () => { void handle.then((h) => h.remove()); };
+  }, [searchOpen, selectedMovie]);
 
   return (
     <div className="app">
       <Navbar onSearchOpen={() => setSearchOpen(true)} />
       <Hero
         movie={featured}
-        loading={featuredLoading}
+        loading={categoriesLoading}
         onPlay={setSelectedMovie}
       />
 
       <main className="app__main">
-        {(featuredError || categoriesError) && (
+        {categoriesError && (
           <div className="api-error">
             <span>⚠️</span>
-            <p>{featuredError ?? categoriesError}</p>
+            <p>{categoriesError}</p>
           </div>
         )}
+        <ContinueWatching onMovieClick={setSelectedMovie} />
         {categoriesLoading ? (
           <div className="skeleton-rows">
             {[1, 2, 3, 4].map((i) => (

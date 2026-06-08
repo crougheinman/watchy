@@ -8,28 +8,55 @@
 }
 
 :root {
-  --bg: #141414;
-  --bg-2: #1f1f1f;
-  --accent: #e50914;
-  --accent-hover: #f40612;
-  --text: #ffffff;
-  --text-muted: #b3b3b3;
+  /* Deep green-charcoal base — cooler and richer than a flat near-black */
+  --bg: #0b0f0b;
+  --bg-2: #141a14;
+  --surface: #1a211a;
+
+  /* Lime → emerald accent system (gradient, not a single flat brand color) */
+  --accent: #a3e635;
+  --accent-2: #22c55e;
+  --accent-hover: #b6f24a;
+  --accent-grad: linear-gradient(135deg, #bef264 0%, #4ade80 55%, #22c55e 100%);
+  --glow: rgba(163, 230, 53, .35);
+
+  --text: #f3f6f0;
+  --text-muted: #93a091;
+
+  /* Match score is GOLD on purpose — avoids the Netflix green "% Match" look */
+  --match-color: #facc15;
+
   --navbar-h: 68px;
-  --match-color: #46d369;
-  --font: "Helvetica Neue", Arial, sans-serif;
+  --radius: 12px;
+  --font: "Sora", system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
 }
 
 html { scroll-behavior: smooth; }
 
 body {
   background-color: var(--bg);
+  /* Soft lime/emerald auras give depth instead of Netflix's flat panel */
+  background-image:
+    radial-gradient(1200px 620px at 12% -12%, rgba(163, 230, 53, .10), transparent 55%),
+    radial-gradient(900px 520px at 102% -4%, rgba(34, 197, 94, .08), transparent 52%);
+  background-attachment: fixed;
   color: var(--text);
   font-family: var(--font);
   line-height: 1.5;
   overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
 a  { color: inherit; text-decoration: none; }
 ul { list-style: none; }
 button { cursor: pointer; border: none; outline: none; font-family: inherit; }
 img { display: block; max-width: 100%; }
+
+/* Lime focus ring for keyboard users */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+::selection { background: rgba(163, 230, 53, .3); color: #fff; }

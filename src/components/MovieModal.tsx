@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Movie, PlayerEventData } from '../types';
 import VideoPlayer from './VideoPlayer';
+import { upsertProgress } from '../lib/watchHistory';
 
 interface MovieModalProps {
   movie: Movie;
@@ -10,6 +11,7 @@ interface MovieModalProps {
 export default function MovieModal({ movie, onClose }: MovieModalProps) {
   const [progressPct, setProgressPct] = useState(0);
   const [playerEvent, setPlayerEvent] = useState<string>('');
+  const lastSavedRef = useRef(0);
 
   /* close on Escape */
   useEffect(() => {
@@ -23,9 +25,24 @@ export default function MovieModal({ movie, onClose }: MovieModalProps) {
   }, [onClose]);
 
   const handlePlayerEvent = useCallback((data: PlayerEventData) => {
-    setProgressPct(data.progress ?? 0);
+    const pct = data.progress ?? 0;
+    const currentTime = data.currentTime ?? 0;
+    setProgressPct(pct);
     setPlayerEvent(data.event);
-  }, []);
+
+    // Persist for Continue Watching. Save on discrete events, and throttle the
+    // high-frequency timeupdate stream to roughly every 5s of playback.
+    const save =
+      data.event === 'pause' ||
+      data.event === 'ended' ||
+      data.event === 'seeked' ||
+      (data.event === 'timeupdate' && Math.abs(currentTime - lastSavedRef.current) >= 5);
+
+    if (save && pct > 0) {
+      lastSavedRef.current = currentTime;
+      upsertProgress(movie, pct, currentTime);
+    }
+  }, [movie]);
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
