@@ -8,11 +8,14 @@ import MovieRow from './components/MovieRow';
 import ContinueWatching from './components/ContinueWatching';
 import MovieModal from './components/MovieModal';
 import SearchOverlay from './components/SearchOverlay';
+import LoginPage from './components/LoginPage';
+import { useAuth } from './hooks/useAuth';
 import { APP_NAME } from './constants';
 import type { Movie } from './types';
 import './App.css';
 
 function App() {
+  const { session, loading: authLoading } = useAuth();
   const { data: categories, loading: categoriesLoading, error: categoriesError } = useFetchCategories();
   const [selectedMovie, setSelectedMovie] = useState<Movie | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -30,6 +33,18 @@ function App() {
     });
     return () => { void handle.then((h) => h.remove()); };
   }, [searchOpen, selectedMovie]);
+
+  // Auth gate: block the app until a session exists.
+  if (authLoading) {
+    return (
+      <div className="auth">
+        <span className="auth__logo">{APP_NAME}</span>
+      </div>
+    );
+  }
+  if (!session) {
+    return <LoginPage />;
+  }
 
   return (
     <div className="app">

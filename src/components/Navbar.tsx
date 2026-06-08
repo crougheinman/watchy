@@ -1,11 +1,13 @@
 import { useState, useEffect } from 'react';
 import { APP_NAME } from '../constants';
+import { useAuth } from '../hooks/useAuth';
 
 interface NavbarProps {
   onSearchOpen: () => void;
 }
 
 export default function Navbar({ onSearchOpen }: NavbarProps) {
+  const { user, signOut } = useAuth();
   const [scrolled, setScrolled] = useState(false);
 
   useEffect(() => {
@@ -17,12 +19,6 @@ export default function Navbar({ onSearchOpen }: NavbarProps) {
   return (
     <nav className={`navbar${scrolled ? ' navbar--scrolled' : ''}`}>
       <span className="navbar__logo">{APP_NAME}</span>
-      <ul className="navbar__links">
-        <li><a href="#">Home</a></li>
-        <li><a href="#">TV Shows</a></li>
-        <li><a href="#">Movies</a></li>
-        <li><a href="#">New &amp; Popular</a></li>
-      </ul>
       <div className="navbar__right">
         <button className="navbar__search-btn" onClick={onSearchOpen} aria-label="Search">
           <svg viewBox="0 0 24 24" fill="none" width={20} height={20}>
@@ -30,7 +26,10 @@ export default function Navbar({ onSearchOpen }: NavbarProps) {
               stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
           </svg>
         </button>
-        <button className="navbar__signin">Sign In</button>
+        <div className="navbar__user">
+          {user?.email && <span className="navbar__email">{user.email}</span>}
+          <button className="navbar__signout" onClick={() => void signOut()}>Sign Out</button>
+        </div>
       </div>
     </nav>
   );

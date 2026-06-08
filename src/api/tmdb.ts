@@ -86,6 +86,22 @@ export async function fetchPopular(): Promise<Movie[]> {
   return data.results.filter((m) => m.backdrop_path).map((m) => mapMovie(m));
 }
 
+// Netflix's TMDB "watch provider" id. Combined with a watch_region, discover
+// returns only titles streaming on Netflix there.
+const NETFLIX_PROVIDER_ID = '8';
+
+export async function fetchNetflix(): Promise<Movie[]> {
+  const data = await get<ListResponse>('/discover/movie', {
+    with_watch_providers:       NETFLIX_PROVIDER_ID,
+    watch_region:               'US',
+    sort_by:                    'popularity.desc',
+    'vote_count.gte':           '100',
+    'primary_release_date.lte': RELEASE_CEILING,
+    with_original_language:     'en',
+  });
+  return data.results.filter((m) => m.backdrop_path).map((m) => mapMovie(m));
+}
+
 export async function fetchByGenre(
   genreId: number,
   extra: Record<string, string> = {},
@@ -111,6 +127,7 @@ export async function fetchSearch(query: string, signal?: AbortSignal): Promise<
 export async function fetchAllCategories(): Promise<MovieCategory[]> {
   const defs: { id: string; title: string; load: () => Promise<Movie[]> }[] = [
     { id: 'trending', title: 'Popular Movies',       load: () => fetchPopular() },
+    { id: 'netflix',  title: 'Netflix',             load: () => fetchNetflix() },
     { id: 'action',   title: 'Action & Adventure',  load: () => fetchByGenre(28) },
     { id: 'comedy',   title: 'Comedy Hits',         load: () => fetchByGenre(35) },
     { id: 'scifi',    title: 'Sci-Fi & Fantasy',    load: () => fetchByGenre(878) },

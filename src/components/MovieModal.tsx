@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Movie, PlayerEventData } from '../types';
 import VideoPlayer from './VideoPlayer';
 import { upsertProgress } from '../lib/watchHistory';
+import { lockLandscape, unlockOrientation } from '../lib/orientation';
 
 interface MovieModalProps {
   movie: Movie;
@@ -12,6 +13,12 @@ export default function MovieModal({ movie, onClose }: MovieModalProps) {
   const [progressPct, setProgressPct] = useState(0);
   const [playerEvent, setPlayerEvent] = useState<string>('');
   const lastSavedRef = useRef(0);
+
+  /* Force landscape while the player is open; restore on close. */
+  useEffect(() => {
+    void lockLandscape();
+    return () => { void unlockOrientation(); };
+  }, []);
 
   /* close on Escape */
   useEffect(() => {
