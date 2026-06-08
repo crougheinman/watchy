@@ -23,3 +23,6 @@ dist-ssr
 *.sln
 *.sw?
 .env
+
+# Built APKs (use build-apk.bat to regenerate)
+*.apk
