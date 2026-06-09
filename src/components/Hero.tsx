@@ -48,13 +48,22 @@ export default function Hero({ movies, loading, onPlay }: HeroProps) {
       if (typeof e.data !== 'string' || !e.origin.includes('youtube')) return;
       try {
         const d = JSON.parse(e.data) as { event?: string; info?: number };
-        if ((d.event === 'onError' || d.event === 'error') && rawKey) {
+        const w = e.source as Window | null;
+        const cmd = (func: string, args: unknown[] = []) =>
+          w?.postMessage(JSON.stringify({ event: 'command', func, args }), '*');
+
+        if (d.event === 'onReady') {
+          // Force muted playback immediately so YouTube's center play overlay
+          // (shown while paused) never lingers.
+          cmd('mute');
+          cmd('playVideo');
+        } else if ((d.event === 'onError' || d.event === 'error') && rawKey) {
           setFailed((prev) => (prev.has(rawKey) ? prev : new Set(prev).add(rawKey)));
         } else if (d.event === 'onStateChange' && d.info === 0) {
-          // ended → loop without a playlist (which would add prev/next controls).
-          const w = e.source as Window | null;
-          w?.postMessage(JSON.stringify({ event: 'command', func: 'seekTo', args: [0, true] }), '*');
-          w?.postMessage(JSON.stringify({ event: 'command', func: 'playVideo', args: [] }), '*');
+          cmd('seekTo', [0, true]); // ended → loop from start
+          cmd('playVideo');
+        } else if (d.event === 'onStateChange' && d.info === 2) {
+          cmd('playVideo'); // paused → resume so no play overlay sticks
         }
       } catch { /* ignore non-JSON frames */ }
     }

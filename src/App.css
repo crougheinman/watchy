@@ -229,7 +229,11 @@
 .movie-row__track {
   display: flex;
   gap: .4rem;
-  padding: .5rem 4%;
+  /* Vertical padding gives the hover-zoom + glow room (overflow-x:auto forces
+     overflow-y to clip, so we pad instead); the negative margin keeps the row
+     spacing visually unchanged. */
+  padding: 2rem 4%;
+  margin: -1.5rem 0;
   overflow-x: auto;
   scrollbar-width: none;
   -ms-overflow-style: none;
@@ -1307,3 +1311,37 @@
   margin-bottom: .25rem;
 }
 .disabled__btn { width: 100%; }
+
+/* =====================
+   MAINTENANCE GATE
+   ===================== */
+.maint__card { text-align: center; }
+.maint__icon { font-size: 2.6rem; line-height: 1; margin-bottom: .5rem; }
+.maint__title {
+  font-size: 1.5rem;
+  font-weight: 800;
+  margin: .25rem 0 .6rem;
+}
+.maint__text {
+  font-size: .92rem;
+  line-height: 1.55;
+  color: var(--text-muted);
+  margin-bottom: 1.1rem;
+}
+.maint__reason {
+  text-align: left;
+  font-size: .85rem;
+  padding: .75rem .85rem;
+  background: rgba(250, 204, 21, .1);
+  border: 1px solid rgba(250, 204, 21, .3);
+  border-radius: 10px;
+}
+.maint__reason-label {
+  display: block;
+  font-size: .7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  color: var(--match-color);
+  margin-bottom: .25rem;
+}

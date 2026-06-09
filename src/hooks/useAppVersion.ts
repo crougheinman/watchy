@@ -4,23 +4,28 @@ import { APP_VERSION, UPDATE_DOWNLOAD_URL } from '../constants';
 import { isOutdated } from '../lib/version';
 
 interface VersionState {
-  /** True until the latest-version lookup resolves. */
+  /** True until the app_config lookup resolves. */
   checking: boolean;
   /** True when this build is older than the version required in Supabase. */
   outdated: boolean;
   latest: string | null;
   downloadUrl: string;
+  /** Global maintenance switch (blocks everyone until cleared). */
+  maintenance: boolean;
+  maintenanceReason: string | null;
 }
 
 interface AppConfigRow {
   latest_version: string | null;
   download_url: string | null;
+  maintenance: boolean | null;
+  maintenance_reason: string | null;
 }
 
 /**
- * Checks the app's build version against the latest version stored in Supabase
- * (`app_config` table). If this build is older, the app must show the update
- * gate. Fails OPEN: if Supabase is unconfigured or the lookup fails, the user
+ * Reads global app config from Supabase (`app_config`): the required version
+ * (drives the update gate) and a maintenance switch (drives the maintenance
+ * gate). Fails OPEN: if Supabase is unconfigured or the lookup fails, the user
  * is never locked out.
  */
 export function useAppVersion(): VersionState {
@@ -29,30 +34,33 @@ export function useAppVersion(): VersionState {
     outdated: false,
     latest: null,
     downloadUrl: UPDATE_DOWNLOAD_URL,
+    maintenance: false,
+    maintenanceReason: null,
   });
 
   useEffect(() => {
-    if (!supabase) return; // not configured → skip the gate
+    if (!supabase) return; // not configured → skip the gates
     let active = true;
 
     supabase
       .from('app_config')
-      .select('latest_version, download_url')
+      .select('latest_version, download_url, maintenance, maintenance_reason')
       .eq('id', 1)
       .maybeSingle()
       .then(({ data, error }) => {
         if (!active) return;
         const row = data as AppConfigRow | null;
-        if (error || !row?.latest_version) {
-          // Fail open — don't block the app on a config/network issue.
-          setState((s) => ({ ...s, checking: false }));
+        if (error || !row) {
+          setState((s) => ({ ...s, checking: false })); // fail open
           return;
         }
         setState({
           checking: false,
-          outdated: isOutdated(APP_VERSION, row.latest_version),
+          outdated: row.latest_version ? isOutdated(APP_VERSION, row.latest_version) : false,
           latest: row.latest_version,
           downloadUrl: row.download_url || UPDATE_DOWNLOAD_URL,
+          maintenance: Boolean(row.maintenance),
+          maintenanceReason: row.maintenance_reason ?? null,
         });
       });
 

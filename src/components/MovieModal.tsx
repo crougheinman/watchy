@@ -4,6 +4,7 @@ import VideoPlayer from './VideoPlayer';
 import ServerIcon from './ServerIcon';
 import { upsertProgress } from '../lib/watchHistory';
 import { lockLandscape, unlockOrientation } from '../lib/orientation';
+import { notifyWatch } from '../lib/notify';
 import {
   SERVERS, getServer, getStoredServerId, storeServerId,
   getStoredShield, storeShield,
@@ -20,6 +21,7 @@ export default function MovieModal({ movie, onClose }: MovieModalProps) {
   const [serverId, setServerId] = useState<string>(getStoredServerId);
   const [shield, setShield] = useState<boolean>(getStoredShield);
   const lastSavedRef = useRef(0);
+  const notifiedRef = useRef('');
   const server = getServer(serverId);
 
   function handleServerChange(id: string) {
@@ -40,6 +42,14 @@ export default function MovieModal({ movie, onClose }: MovieModalProps) {
     void lockLandscape();
     return () => { void unlockOrientation(); };
   }, []);
+
+  /* Notify Telegram once per opened title ("user is watching …"). */
+  useEffect(() => {
+    const key = `${movie.mediaType}-${movie.tmdbId}`;
+    if (notifiedRef.current === key) return;
+    notifiedRef.current = key;
+    notifyWatch(movie);
+  }, [movie]);
 
   /* close on Escape */
   useEffect(() => {

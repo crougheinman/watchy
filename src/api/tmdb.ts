@@ -1,5 +1,5 @@
 import type { Movie, MovieCategory } from '../types';
-import { TMDB_API_BASE as BASE_URL, TMDB_IMG_BASE as IMG_BASE } from '../constants';
+import { TMDB_API_BASE as BASE_URL, TMDB_IMG_BASE as IMG_BASE, TMDB_API_KEY } from '../constants';
 
 const GENRE_MAP: Record<number, string> = {
   28:    'Action',
@@ -65,9 +65,11 @@ async function get<T>(
 ): Promise<T> {
   const url = new URL(`${BASE_URL}${path}`);
   for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
+  // TMDB v3 auth: append the API key when configured.
+  if (TMDB_API_KEY) url.searchParams.set('api_key', TMDB_API_KEY);
 
   const res = await fetch(url.toString(), { signal });
-  if (!res.ok) throw new Error(`Videasy API ${res.status}: ${res.statusText}`);
+  if (!res.ok) throw new Error(`TMDB API ${res.status}: ${res.statusText}`);
   return res.json() as Promise<T>;
 }
 
