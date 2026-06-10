@@ -55,10 +55,22 @@ npm run cap:android           # build + sync + open Android Studio
 ```
 Then **Build → Build APK(s)**, or run on a device/emulator.
 
-### Releasing a new version (forced update)
-1. Bump `"version"` in `package.json` (e.g. `1.0.0` → `1.1.0`).
-2. `build-apk.bat` → upload `watchy-debug.apk` to the Google Drive download folder.
-3. In Supabase, raise the required version (see §5 “Force update”).
+### Releasing a new version
+
+**`build-apk.bat`** now pulls the version FROM Supabase (`app_config.latest_version`)
+and stamps `package.json` automatically (step 1/4), then builds, then uploads to
+Google Drive via rclone. So the source of truth for the version is Supabase.
+
+**One-command zero-gap release — `release.bat <version>`** (e.g. `release.bat 1.0.5`):
+1. Maintenance ON  →  2. set required version  →  3. build + upload APK  →  4. Maintenance OFF.
+
+Because the maintenance gate outranks the update gate, users see "We'll be right
+back" during the release and only get "Update required" once it finishes — by
+which time the new APK is already on Drive (no gap). Needs your Supabase
+**service_role** key pasted into `release.bat` (gitignored).
+
+Manual path if you prefer: `/setversion 1.0.5` in Telegram (or dashboard) →
+run `build-apk.bat`.
 
 ---
 
@@ -166,6 +178,34 @@ Or manually (one line):
 ```bash
 curl "https://api.telegram.org/bot<TOKEN>/setWebhook" -d "url=https://<ref>.supabase.co/functions/v1/telegram-webhook" -d "secret_token=<WEBHOOK_SECRET>"
 curl "https://api.telegram.org/bot<TOKEN>/getWebhookInfo"   # verify
+```
+
+### Admin control commands (in the Telegram chat)
+After deploying `telegram-webhook`, message the bot (you must be the admin —
+`TELEGRAM_ADMIN_ID`, default = `TELEGRAM_CHAT_ID`):
+
+| Command | Action |
+|---|---|
+| `/status` | Show maintenance state + required version, with a tap-toggle button |
+| `/maintenance_on <reason>` | Turn ON maintenance — asks to **Confirm** first |
+| `/maintenance_off` | Turn OFF maintenance |
+| `/setversion 1.0.4` | Set required version (forces APK update) — asks to **Confirm** first |
+| `/help` | List commands |
+
+Optionally register the command menu so they autocomplete in Telegram:
+```bash
+curl "https://api.telegram.org/bot<TOKEN>/setMyCommands" \
+  -H "Content-Type: application/json" \
+  -d '{"commands":[
+    {"command":"status","description":"Maintenance & version"},
+    {"command":"maintenance_on","description":"Turn ON maintenance"},
+    {"command":"maintenance_off","description":"Turn OFF maintenance"},
+    {"command":"setversion","description":"Set required version"},
+    {"command":"help","description":"List commands"}]}'
+```
+Set the admin id (optional — defaults to TELEGRAM_CHAT_ID):
+```bash
+supabase secrets set TELEGRAM_ADMIN_ID="<your telegram user id>"
 ```
 
 ### Useful bot API calls

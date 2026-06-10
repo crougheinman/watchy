@@ -1,8 +1,16 @@
-# Telegram approve-from-chat — setup
+# Telegram control webhook — setup
 
-Approve or reject new sign-ups straight from Telegram. New users are created
-**disabled** (reason "Screening"); the bot DMs you a message with **✅ Approve /
-🚫 Reject** buttons that update `public.profiles` via this Edge Function.
+This one Edge Function powers two things from your Telegram bot:
+
+1. **Approve / Reject** new sign-ups (updates `public.profiles`).
+2. **Admin commands** to run the backend (updates `public.app_config`):
+   `/status`, `/maintenance_on <reason>`, `/maintenance_off`,
+   `/setversion <x.y.z>`, `/help`. Destructive actions (maintenance ON,
+   setversion) ask for a Confirm tap. Only the admin id may act
+   (`TELEGRAM_ADMIN_ID`, defaults to `TELEGRAM_CHAT_ID`).
+
+New users are created **disabled** (reason "Screening"); the bot DMs you a
+message with **✅ Approve / 🚫 Reject** buttons.
 
 ```
 Sign-up ─▶ handle_new_user() trigger ─▶ Telegram message + buttons

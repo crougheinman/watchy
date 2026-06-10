@@ -1,10 +1,20 @@
 import { useEffect, useState } from 'react';
+import { Capacitor } from '@capacitor/core';
 import { supabase } from '../lib/supabase';
 import { APP_VERSION, UPDATE_DOWNLOAD_URL } from '../constants';
 import { isOutdated } from '../lib/version';
 
+// The update gate only applies to the installed app (APKs can be stale). The
+// browser always serves the latest build, so it's never "outdated".
+const IS_NATIVE = Capacitor.isNativePlatform();
+
+// How often to re-check app_config so maintenance/version toggles take effect
+// without a manual refresh. Also re-checks instantly whenever the app/tab
+// regains focus.
+const POLL_MS = 60_000;
+
 interface VersionState {
-  /** True until the app_config lookup resolves. */
+  /** True until the first app_config lookup resolves. */
   checking: boolean;
   /** True when this build is older than the version required in Supabase. */
   outdated: boolean;
@@ -24,9 +34,10 @@ interface AppConfigRow {
 
 /**
  * Reads global app config from Supabase (`app_config`): the required version
- * (drives the update gate) and a maintenance switch (drives the maintenance
- * gate). Fails OPEN: if Supabase is unconfigured or the lookup fails, the user
- * is never locked out.
+ * (update gate, native only) and a maintenance switch. Re-checks on an interval
+ * and on focus so changes propagate to open clients within ~1 min. Fails OPEN:
+ * config/network errors during a poll keep the last known state (and never lock
+ * users out on the first load).
  */
 export function useAppVersion(): VersionState {
   const [state, setState] = useState<VersionState>({
@@ -42,29 +53,41 @@ export function useAppVersion(): VersionState {
     if (!supabase) return; // not configured → skip the gates
     let active = true;
 
-    supabase
-      .from('app_config')
-      .select('latest_version, download_url, maintenance, maintenance_reason')
-      .eq('id', 1)
-      .maybeSingle()
-      .then(({ data, error }) => {
-        if (!active) return;
-        const row = data as AppConfigRow | null;
-        if (error || !row) {
-          setState((s) => ({ ...s, checking: false })); // fail open
-          return;
-        }
-        setState({
-          checking: false,
-          outdated: row.latest_version ? isOutdated(APP_VERSION, row.latest_version) : false,
-          latest: row.latest_version,
-          downloadUrl: row.download_url || UPDATE_DOWNLOAD_URL,
-          maintenance: Boolean(row.maintenance),
-          maintenanceReason: row.maintenance_reason ?? null,
+    const load = () => {
+      supabase!
+        .from('app_config')
+        .select('latest_version, download_url, maintenance, maintenance_reason')
+        .eq('id', 1)
+        .maybeSingle()
+        .then(({ data, error }) => {
+          if (!active) return;
+          const row = data as AppConfigRow | null;
+          if (error || !row) {
+            // Keep last known gate state; just clear the initial spinner.
+            setState((s) => ({ ...s, checking: false }));
+            return;
+          }
+          setState({
+            checking: false,
+            outdated: IS_NATIVE && row.latest_version ? isOutdated(APP_VERSION, row.latest_version) : false,
+            latest: row.latest_version,
+            downloadUrl: row.download_url || UPDATE_DOWNLOAD_URL,
+            maintenance: Boolean(row.maintenance),
+            maintenanceReason: row.maintenance_reason ?? null,
+          });
         });
-      });
+    };
 
-    return () => { active = false; };
+    load(); // initial
+    const interval = setInterval(load, POLL_MS);
+    const onVisible = () => { if (document.visibilityState === 'visible') load(); };
+    document.addEventListener('visibilitychange', onVisible);
+
+    return () => {
+      active = false;
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
   }, []);
 
   return state;

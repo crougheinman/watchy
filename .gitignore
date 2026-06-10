@@ -29,3 +29,6 @@ dist-ssr
 
 # Contains Telegram bot token / webhook secret
 set-webhook.bat
+
+# Contains Supabase service role key
+release.bat
