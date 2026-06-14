@@ -6,29 +6,47 @@ import Navbar from './components/Navbar';
 import Hero from './components/Hero';
 import MovieRow from './components/MovieRow';
 import ContinueWatching from './components/ContinueWatching';
+import MyListRow from './components/MyListRow';
 import MovieModal from './components/MovieModal';
 import SearchOverlay from './components/SearchOverlay';
 import LoginPage from './components/LoginPage';
 import UpdateRequired from './components/UpdateRequired';
 import AccountDisabled from './components/AccountDisabled';
 import Maintenance from './components/Maintenance';
+import AnnouncementBanner from './components/AnnouncementBanner';
+import ApprovedWelcome from './components/ApprovedWelcome';
 import { useAuth } from './hooks/useAuth';
 import { useAppVersion } from './hooks/useAppVersion';
 import { useAccountStatus } from './hooks/useAccountStatus';
+import { initWatchHistory, clearWatchHistory } from './lib/watchHistory';
+import { initMyList, clearMyList } from './lib/myList';
 import { APP_NAME } from './constants';
 import type { Movie } from './types';
 import './App.css';
 
 function App() {
   const { session, loading: authLoading, signOut } = useAuth();
-  const { checking: versionChecking, outdated, latest, downloadUrl, maintenance, maintenanceReason } = useAppVersion();
-  const { checking: statusChecking, disabled, reason } = useAccountStatus(session?.user?.id);
+  const { checking: versionChecking, outdated, latest, downloadUrl, maintenance, maintenanceReason, announcement } = useAppVersion();
+  const { checking: statusChecking, disabled, reason, justApproved, clearJustApproved } = useAccountStatus(session?.user?.id);
   const { data: categories, loading: categoriesLoading, error: categoriesError } = useFetchCategories();
   const [selectedMovie, setSelectedMovie] = useState<Movie | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
 
+  const uid = session?.user?.id ?? null;
+
   // Hero rotates through the top 10 trending titles — no separate request.
   const heroMovies = categories?.find((c) => c.id === 'trending')?.movies.slice(0, 10) ?? [];
+
+  // Load (and clear) the user's cloud My List + Continue Watching.
+  useEffect(() => {
+    if (uid) {
+      void initWatchHistory(uid);
+      void initMyList(uid);
+    } else {
+      clearWatchHistory();
+      clearMyList();
+    }
+  }, [uid]);
 
   // Android hardware back button: close the topmost overlay, else leave the app.
   useEffect(() => {
@@ -68,6 +86,7 @@ function App() {
   return (
     <div className="app">
       <Navbar onSearchOpen={() => setSearchOpen(true)} />
+      <AnnouncementBanner text={announcement} />
       <Hero
         movies={heroMovies}
         loading={categoriesLoading}
@@ -82,6 +101,7 @@ function App() {
           </div>
         )}
         <ContinueWatching onMovieClick={setSelectedMovie} />
+        <MyListRow onMovieClick={setSelectedMovie} />
         {categoriesLoading ? (
           <div className="skeleton-rows">
             {[1, 2, 3, 4].map((i) => (
@@ -108,8 +128,14 @@ function App() {
       </footer>
 
       {selectedMovie && (
-        <MovieModal movie={selectedMovie} onClose={() => setSelectedMovie(null)} />
+        <MovieModal
+          movie={selectedMovie}
+          onClose={() => setSelectedMovie(null)}
+          onSelectRelated={setSelectedMovie}
+        />
       )}
+
+      {justApproved && <ApprovedWelcome onDismiss={clearJustApproved} />}
 
       {searchOpen && (
         <SearchOverlay

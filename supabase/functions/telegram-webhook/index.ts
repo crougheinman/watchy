@@ -74,15 +74,26 @@ const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replac
 const isAdmin = (id: unknown) => ADMIN_ID !== "" && String(id) === ADMIN_ID;
 
 // ---- Command handling -------------------------------------------------------
+async function getConfigFull() {
+  const r = await fetch(
+    `${SUPABASE_URL}/rest/v1/app_config?id=eq.1&select=maintenance,maintenance_reason,latest_version,announcement`,
+    { headers: sbHeaders },
+  );
+  if (!r.ok) return null;
+  const rows = await r.json();
+  return rows?.[0] ?? null;
+}
+
 async function statusText(): Promise<{ text: string; markup: unknown }> {
-  const c = await getConfig();
+  const c = await getConfigFull();
   if (!c) return { text: "⚠️ Could not read app_config.", markup: kb([]) };
   const on = c.maintenance;
   const text =
     `📊 <b>Watchy status</b>\n\n` +
     `🛠️ Maintenance: <b>${on ? "ON" : "OFF"}</b>` +
     (on && c.maintenance_reason ? `\nReason: ${esc(c.maintenance_reason)}` : "") +
-    `\n📦 Required version: <b>${esc(c.latest_version ?? "—")}</b>`;
+    `\n📦 Required version: <b>${esc(c.latest_version ?? "—")}</b>` +
+    `\n📢 Announcement: ${c.announcement ? esc(c.announcement) : "<i>none</i>"}`;
   const markup = on
     ? kb([[btn("✅ Turn OFF maintenance", "m_off")]])
     : kb([[btn("🛠️ Turn ON maintenance", "m_on_ask")]]);
@@ -95,6 +106,8 @@ const HELP =
   `/maintenance_on &lt;reason&gt; — turn ON (confirm)\n` +
   `/maintenance_off — turn OFF\n` +
   `/setversion &lt;x.y.z&gt; — set required version (confirm)\n` +
+  `/announce &lt;text&gt; — set announcement banner\n` +
+  `/announce_off — clear announcement\n` +
   `/help — this message`;
 
 async function handleCommand(msg: any) {
@@ -131,6 +144,16 @@ async function handleCommand(msg: any) {
       `⚠️ Set required version to <b>${esc(arg)}</b>?\nOlder app installs will be forced to update. Make sure the new APK is uploaded.`,
       kb([[btn(`⚠️ Confirm ${arg}`, `sv:${arg}`), btn("Cancel", "x")]]),
     );
+  } else if (cmd === "/announce") {
+    if (!arg) {
+      await send(chatId, "Usage: <code>/announce New movies added this week!</code>\nOr <code>/announce_off</code> to clear.");
+      return;
+    }
+    const ok = (await patch("app_config", "id=eq.1", { announcement: arg })).ok;
+    await send(chatId, ok ? `📢 Announcement set:\n${esc(arg)}` : "⚠️ Update failed.");
+  } else if (cmd === "/announce_off") {
+    const ok = (await patch("app_config", "id=eq.1", { announcement: null })).ok;
+    await send(chatId, ok ? "📢 Announcement cleared." : "⚠️ Update failed.");
   } else if (cmd === "/help" || cmd === "/start") {
     await send(chatId, HELP);
   }

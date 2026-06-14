@@ -24,6 +24,20 @@ export interface MovieCategory {
   movies: Movie[];
 }
 
+export interface CastMember {
+  id: number;
+  name: string;
+  character: string;
+  profile: string; // image URL, or '' if none
+}
+
+export interface TitleExtras {
+  cast: CastMember[];
+  similar: Movie[];
+  runtime: number | null;
+  tagline: string | null;
+}
+
 export interface FetchState<T> {
   data: T | null;
   loading: boolean;

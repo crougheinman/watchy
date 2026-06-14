@@ -23,6 +23,8 @@ interface VersionState {
   /** Global maintenance switch (blocks everyone until cleared). */
   maintenance: boolean;
   maintenanceReason: string | null;
+  /** Optional app-wide announcement banner text (null = none). */
+  announcement: string | null;
 }
 
 interface AppConfigRow {
@@ -30,6 +32,7 @@ interface AppConfigRow {
   download_url: string | null;
   maintenance: boolean | null;
   maintenance_reason: string | null;
+  announcement: string | null;
 }
 
 /**
@@ -47,6 +50,7 @@ export function useAppVersion(): VersionState {
     downloadUrl: UPDATE_DOWNLOAD_URL,
     maintenance: false,
     maintenanceReason: null,
+    announcement: null,
   });
 
   useEffect(() => {
@@ -56,7 +60,7 @@ export function useAppVersion(): VersionState {
     const load = () => {
       supabase!
         .from('app_config')
-        .select('latest_version, download_url, maintenance, maintenance_reason')
+        .select('latest_version, download_url, maintenance, maintenance_reason, announcement')
         .eq('id', 1)
         .maybeSingle()
         .then(({ data, error }) => {
@@ -74,6 +78,7 @@ export function useAppVersion(): VersionState {
             downloadUrl: row.download_url || UPDATE_DOWNLOAD_URL,
             maintenance: Boolean(row.maintenance),
             maintenanceReason: row.maintenance_reason ?? null,
+            announcement: row.announcement ?? null,
           });
         });
     };

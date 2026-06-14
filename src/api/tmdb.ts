@@ -1,4 +1,4 @@
-import type { Movie, MovieCategory } from '../types';
+import type { Movie, MovieCategory, TitleExtras } from '../types';
 import { TMDB_API_BASE as BASE_URL, TMDB_IMG_BASE as IMG_BASE, TMDB_API_KEY } from '../constants';
 
 const GENRE_MAP: Record<number, string> = {
@@ -139,6 +139,42 @@ export async function fetchTrailerKey(tmdbId: number, signal?: AbortSignal): Pro
   } catch {
     return null;
   }
+}
+
+interface RawCast {
+  id: number;
+  name: string;
+  character?: string;
+  profile_path: string | null;
+}
+interface DetailsResponse {
+  runtime?: number;
+  episode_run_time?: number[];
+  tagline?: string;
+  credits?: { cast?: RawCast[] };
+  similar?: ListResponse;
+}
+
+/** Cast + similar titles + runtime for the detail modal (one TMDB request). */
+export async function fetchTitleExtras(movie: Movie, signal?: AbortSignal): Promise<TitleExtras> {
+  const kind = movie.mediaType === 'tv' ? 'tv' : 'movie';
+  const data = await get<DetailsResponse>(
+    `/${kind}/${movie.tmdbId}`,
+    { append_to_response: 'credits,similar' },
+    signal,
+  );
+  const cast = (data.credits?.cast ?? []).slice(0, 12).map((c) => ({
+    id: c.id,
+    name: c.name,
+    character: c.character ?? '',
+    profile: c.profile_path ? `${IMG_BASE}/w185${c.profile_path}` : '',
+  }));
+  const similar = (data.similar?.results ?? [])
+    .filter((m) => m.poster_path)
+    .slice(0, 12)
+    .map((m) => mapMovie(m, kind));
+  const runtime = data.runtime ?? data.episode_run_time?.[0] ?? null;
+  return { cast, similar, runtime, tagline: data.tagline ?? null };
 }
 
 export async function fetchSearch(query: string, signal?: AbortSignal): Promise<Movie[]> {

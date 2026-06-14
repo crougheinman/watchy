@@ -1,10 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { Movie, PlayerEventData } from '../types';
+import type { Movie, PlayerEventData, TitleExtras } from '../types';
 import VideoPlayer from './VideoPlayer';
 import ServerIcon from './ServerIcon';
 import { upsertProgress } from '../lib/watchHistory';
 import { lockLandscape, unlockOrientation } from '../lib/orientation';
 import { notifyWatch } from '../lib/notify';
+import { fetchTitleExtras } from '../api/tmdb';
+import { useMyList } from '../hooks/useMyList';
+import { toggleList, isInList } from '../lib/myList';
 import {
   SERVERS, getServer, getStoredServerId, storeServerId,
   getStoredShield, storeShield,
@@ -13,16 +16,26 @@ import {
 interface MovieModalProps {
   movie: Movie;
   onClose: () => void;
+  /** Open a related title (swaps the modal to it). */
+  onSelectRelated?: (movie: Movie) => void;
 }
 
-export default function MovieModal({ movie, onClose }: MovieModalProps) {
+export default function MovieModal({ movie, onClose, onSelectRelated }: MovieModalProps) {
   const [progressPct, setProgressPct] = useState(0);
   const [playerEvent, setPlayerEvent] = useState<string>('');
   const [serverId, setServerId] = useState<string>(getStoredServerId);
   const [shield, setShield] = useState<boolean>(getStoredShield);
+  const [extras, setExtras] = useState<{ key: string; data: TitleExtras } | null>(null);
   const lastSavedRef = useRef(0);
   const notifiedRef = useRef('');
   const server = getServer(serverId);
+  const movieKey = `${movie.mediaType}-${movie.tmdbId}`;
+  // Only use extras that belong to the current title (auto-clears on change).
+  const currentExtras = extras && extras.key === movieKey ? extras.data : null;
+
+  // Re-render the My List button when the list changes; compute saved state.
+  useMyList();
+  const saved = isInList(movie);
 
   function handleServerChange(id: string) {
     setServerId(id);
@@ -50,6 +63,16 @@ export default function MovieModal({ movie, onClose }: MovieModalProps) {
     notifiedRef.current = key;
     notifyWatch(movie);
   }, [movie]);
+
+  /* Fetch cast + similar for the current title. */
+  useEffect(() => {
+    let active = true;
+    const ctrl = new AbortController();
+    fetchTitleExtras(movie, ctrl.signal)
+      .then((data) => { if (active) setExtras({ key: movieKey, data }); })
+      .catch(() => { /* leave extras as-is */ });
+    return () => { active = false; ctrl.abort(); };
+  }, [movie, movieKey]);
 
   /* close on Escape */
   useEffect(() => {
@@ -136,14 +159,25 @@ export default function MovieModal({ movie, onClose }: MovieModalProps) {
         {/* Meta */}
         <div className="modal__meta">
           <div className="modal__meta-left">
-            <h2 className="modal__title">{movie.title}</h2>
+            <div className="modal__title-row">
+              <h2 className="modal__title">{movie.title}</h2>
+              <button
+                className={`mylist-btn${saved ? ' mylist-btn--on' : ''}`}
+                onClick={() => toggleList(movie)}
+                aria-pressed={saved}
+              >
+                {saved ? '✓ My List' : '+ My List'}
+              </button>
+            </div>
             <div className="modal__info">
               {movie.matchScore && (
                 <span className="modal__match">{movie.matchScore}% Match</span>
               )}
               <span>{movie.year}</span>
               {movie.rating   && <span className="modal__cert">{movie.rating}</span>}
-              {movie.duration && <span>{movie.duration}</span>}
+              {(movie.duration || currentExtras?.runtime) && (
+                <span>{movie.duration ?? `${currentExtras?.runtime}m`}</span>
+              )}
               {playerEvent && (
                 <span className="modal__event-badge">{playerEvent}</span>
               )}
@@ -162,6 +196,45 @@ export default function MovieModal({ movie, onClose }: MovieModalProps) {
             )}
           </div>
         </div>
+
+        {/* Cast */}
+        {currentExtras && currentExtras.cast.length > 0 && (
+          <div className="modal__section">
+            <h3 className="modal__section-title">Cast</h3>
+            <div className="cast-row">
+              {currentExtras.cast.map((c) => (
+                <div key={c.id} className="cast-card">
+                  {c.profile
+                    ? <img className="cast-card__photo" src={c.profile} alt={c.name} loading="lazy" />
+                    : <div className="cast-card__photo cast-card__photo--empty">🎭</div>}
+                  <p className="cast-card__name">{c.name}</p>
+                  {c.character && <p className="cast-card__role">{c.character}</p>}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* More Like This */}
+        {currentExtras && currentExtras.similar.length > 0 && onSelectRelated && (
+          <div className="modal__section">
+            <h3 className="modal__section-title">More Like This</h3>
+            <div className="similar-grid">
+              {currentExtras.similar.map((m) => (
+                <button
+                  key={`${m.mediaType}-${m.tmdbId}`}
+                  className="similar-card"
+                  onClick={() => onSelectRelated(m)}
+                >
+                  {m.poster
+                    ? <img className="similar-card__poster" src={m.poster} alt={m.title} loading="lazy" />
+                    : <div className="similar-card__poster similar-card__poster--empty">🎬</div>}
+                  <span className="similar-card__title">{m.title}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
